@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Product } from '@shared/schema';
+import { Product } from '../schema';
 import { apiRequest } from './queryClient';
+import { API_BASE_URL } from '@/lib/config';
 
 export interface CartItem {
   id: string;
@@ -34,7 +35,7 @@ export const useCartStore = create<CartState>()(
         // Sync with backend first
         try {
           const { sessionId } = get();
-          await apiRequest("POST", "/api/cart", {
+          await apiRequest("POST", "${API_BASE_URL}/api/cart", {
             sessionId,
             productId: product.id,
             quantity
