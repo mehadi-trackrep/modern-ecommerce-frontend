@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Lock, Check } from "lucide-react";
+import { Lock, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,17 +7,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCartStore } from "@/lib/cart-store";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { checkoutSchema, type CheckoutData } from "@shared/schema";
+import { checkoutSchema, type CheckoutData } from "@/shared/schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Checkout() {
   const { items, getTotal, clearCart, sessionId } = useCartStore();
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [orderConfirmed, setOrderConfirmed] = useState(false);
@@ -43,8 +42,25 @@ export default function Checkout() {
 
   const createOrderMutation = useMutation({
     mutationFn: async (data: CheckoutData & { sessionId: string }) => {
-      const response = await apiRequest("POST", "/api/orders", data);
-      return await response.json();
+      try {
+        const response = await apiRequest("POST", "/orders", data);
+        const text = await response.text();
+        
+        // Check if response is JSON
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          // If it's not JSON, it might be an HTML error page
+          if (text.startsWith('<')) {
+            throw new Error('Server returned an unexpected error page. Please try again.');
+          } else {
+            throw new Error(`Server returned invalid response: ${text.substring(0, 100)}...`);
+          }
+        }
+      } catch (error) {
+        // Re-throw the error so it can be handled by onError
+        throw error;
+      }
     },
     onSuccess: (order) => {
       setOrderId(order.id);
@@ -55,9 +71,10 @@ export default function Checkout() {
         description: "Your order has been placed successfully.",
       });
       // Invalidate any order-related queries
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/orders"] });
     },
     onError: (error: any) => {
+      console.error("Order creation error:", error);
       toast({
         title: "Order Failed",
         description: error.message || "Failed to place order. Please try again.",
@@ -292,7 +309,7 @@ export default function Checkout() {
                       <span className="ml-2 text-sm">× {item.quantity}</span>
                     </div>
                     <span className="text-sm font-medium" data-testid={`order-item-total-${item.id}`}>
-                      {(item.product.price * item.quantity / 100).toFixed(2)}৳
+                      {((typeof item.product.price === 'string' ? parseInt(item.product.price) : item.product.price) * (typeof item.quantity === 'string' ? parseInt(item.quantity) : item.quantity) / 100).toFixed(2)}৳
                     </span>
                   </div>
                 ))}
